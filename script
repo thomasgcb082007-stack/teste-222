@@ -1,0 +1,240 @@
+const APP = {
+  ver: "1.0.0",
+  user: {
+    id: "",
+    darkMode: false,
+    speed: "100",
+    spoofEnabled: false
+  },
+  cfg: {
+    auto: false,
+    fontSize: "12px",
+    fontWeight: "normal"
+  }
+};
+
+const panelStyle = {
+  position: "fixed",
+  right: "24px",
+  top: "24px",
+  display: "flex",
+  flexDirection: "column",
+  gap: "8px",
+  zIndex: 9999,
+  width: "220px",
+  maxWidth: "100%",
+  background: "linear-gradient(145deg, #6a0dad, #9c27b0)",
+  borderRadius: "12px",
+  padding: "10px",
+  boxShadow: "0 10px 30px rgba(0,0,0,0.3)"
+};
+
+function createElement(tagName) {
+  return document.createElement(tagName);
+}
+
+function sendToast(msg, duration = 3000, gravity = "top") {
+  try {
+    if (typeof Toastify !== "undefined") {
+      Toastify({ text: msg, duration: duration, gravity: gravity }).showToast();
+      return;
+    }
+  } catch (e) {}
+  // fallback
+  console.log("Toast:", msg);
+}
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = src;
+    s.async = true;
+    s.onload = () => resolve();
+    s.onerror = (e) => reject(e);
+    document.head.appendChild(s);
+  });
+}
+
+class UI {
+  constructor() {
+    this._render();
+    this._attachHandlers();
+    this._loadExternalLibs();
+  }
+
+  _render() {
+    const container = createElement("div");
+    container.className = "crimson-panel";
+    // Inline style for the panel wrapper
+    container.style.position = panelStyle.position;
+    container.style.right = panelStyle.right;
+    container.style.top = panelStyle.top;
+    container.style.display = panelStyle.display;
+    container.style.flexDirection = panelStyle.flexDirection;
+    container.style.gap = panelStyle.gap;
+    container.style.zIndex = panelStyle.zIndex;
+    container.style.width = panelStyle.width;
+    container.style.maxWidth = panelStyle.maxWidth;
+    container.style.background = panelStyle.background;
+    container.style.borderRadius = panelStyle.borderRadius;
+    container.style.padding = panelStyle.padding;
+    container.style.boxShadow = panelStyle.boxShadow;
+    container.style.color = "#fff";
+    container.style.fontSize = APP.cfg.fontSize;
+    container.style.fontWeight = APP.cfg.fontWeight;
+
+    const html = `
+      <div class="crimson-header" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+        <img src="https://crimsonstrauss.xyz/img/logo/eclipse.png" alt="logo" class="crimson-logo" style="height:24px;width:24px;border-radius:4px"/>
+        <div style="flex:1">v${APP.ver}</div>
+      </div>
+      <div class="crimson-body" style="margin-top:8px;">
+        <div class="row" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div><small>Auto</small></div>
+          <label><input id="darkModeCheck" type="checkbox"/></label>
+        </div>
+        <div class="row" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <small>Speed</small>
+            <span id="speedValue">100ms</span>
+          </div>
+          <input id="speedSlider" type="range" min="0" max="100" value="0"/>
+        </div>
+        <div class="row" id="log" style="min-height:40px;font-size:11px;opacity:0.95"></div>
+      </div>
+      <div class="crimson-footer" style="margin-top:8px;font-size:11px;opacity:0.9">CrimsonStrauss by EclipseLunar</div>
+    `;
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    this.container = container;
+  }
+
+  _attachHandlers() {
+    const header = this.container.querySelector(".crimson-header");
+    const bodyEl = this.container.querySelector(".crimson-body");
+    header.addEventListener("click", () => {
+      header.classList.toggle("collapsed");
+      bodyEl.classList.toggle("collapsed");
+      const isCollapsed = header.classList.contains("collapsed");
+      localStorage.setItem("crimson_collapsed", isCollapsed ? "1" : "0");
+      sendToast(isCollapsed ? "✔️ Collapsed" : "✖️ Expanded", 2000);
+    });
+
+    const stored = localStorage.getItem("crimson_collapsed") === "1";
+    if (stored) {
+      header.classList.add("collapsed");
+      bodyEl.classList.add("collapsed");
+    }
+
+    const darkCheck = this.container.querySelector("#darkModeCheck");
+    darkCheck.checked = !!APP.user.darkMode;
+    darkCheck.onchange = (e) => {
+      APP.user.darkMode = e.target.checked;
+      if (APP.user.darkMode && typeof DarkReader !== "undefined") {
+        try { DarkReader.enable(); } catch (e) {}
+      } else {
+        try { if (typeof DarkReader !== "undefined") DarkReader.disable(); } catch (e) {}
+      }
+      sendToast(APP.user.darkMode ? "✔️ Darkmode ON" : "✖️ Darkmode OFF", 1500);
+    };
+
+    const speed = this.container.querySelector("#speedSlider");
+    const speedValEl = this.container.querySelector("#speedValue");
+    const speeds = ["444","024","036","072","524","824","372","100","200","300"];
+    const updateSpeed = () => {
+      const idx = Math.min(Math.floor(parseInt(speed.value, 10) / 10), speeds.length - 1);
+      const r = speeds[idx] || "100";
+      APP.user.speed = r;
+      speedValEl.textContent = r + "ms";
+    };
+    speed.addEventListener("input", updateSpeed);
+    speed.addEventListener("change", () => {
+      updateSpeed();
+      sendToast("⏱ Velocidade definida " + APP.user.speed + "ms", 2000);
+    });
+    updateSpeed();
+  }
+
+  async _loadExternalLibs() {
+    try {
+      // Load DarkReader and Toastify if they are not present.
+      if (typeof DarkReader === "undefined") {
+        await loadScript("https://cdn.jsdelivr.net/npm/darkreader@4.9.69/lib/darkreader.min.js").catch(()=>{});
+      }
+      if (typeof Toastify === "undefined") {
+        await loadScript("https://cdn.jsdelivr.net/npm/toastify-js").catch(()=>{});
+      }
+      if (APP.user.darkMode && typeof DarkReader !== "undefined") {
+        try { DarkReader.enable(); } catch (e) {}
+      }
+      sendToast("☪️ EclipseLunar v" + APP.ver + " loaded!", 3000);
+    } catch (e) {
+      console.error("error loading externals", e);
+      sendToast("⚠️ erro ao carregar libs", 3000);
+    }
+  }
+}
+
+// Safe fetch hook: intercept responses and optionally modify JSON payloads.
+// NOTE: This hook clones responses and only attempts to parse text; if parsing
+// fails, it returns the original response untouched.
+(function installFetchHook() {
+  if (!window.fetch) return;
+  const origFetch = window.fetch.bind(window);
+
+  window.fetch = async function(input, init) {
+    const response = await origFetch(input, init);
+    try {
+      const clone = response.clone();
+      const text = await clone.text();
+      if (!text) return response;
+      let j;
+      try {
+        j = JSON.parse(text);
+      } catch (e) {
+        return response; // not JSON
+      }
+      // Example: attempt to find nested object and apply spoof if enabled
+      // The original obfuscated code attempted to access deeply nested numeric keys.
+      // We'll defensively search for objects that match expected patterns.
+      if (APP.user.spoofEnabled) {
+        // Simple heuristic: if object has keys that look like "J" and nested "B"
+        if (j && typeof j === "object" && j.J && j.J["2A"] && j.J["2A"]["2z"] && j.J["2A"]["2z"].B) {
+          const B = j.J["2A"]["2z"].B;
+          if (B && B["1W"] && Array.isArray(B["1W"].h) && B["1W"].h.length > 0) {
+            // Apply a harmless spoof
+            B["5V"] = { "5U": false };
+            B["1W"].h[0] = "Bypassed [[☃ SPOOF ]]";
+            B["1W"]["5Q"] = { "SPOOF 1": { "1l": "SPOOF", "5P": "OK", "1k": false, "5N": true } };
+            j.J["2A"]["2z"].B = B;
+            sendToast("🔓 Spoof applied", 2000);
+            const newBody = JSON.stringify(j);
+            const headers = new Headers(response.headers);
+            // Ensure content-type is application/json
+            headers.set("Content-Type", "application/json;charset=UTF-8");
+            return new Response(newBody, {
+              status: response.status,
+              statusText: response.statusText,
+              headers: headers
+            });
+          }
+        }
+      }
+    } catch (e) {
+      // swallow errors and fall back to returning original response
+      console.warn("fetch hook error:", e);
+    }
+    return response;
+  };
+})();
+
+
+// Initialize UI
+(function init() {
+  try {
+    new UI();
+    console.log("UI initialized");
+  } catch (err) {
+    console.error("init error", err);
+  }
+})();
